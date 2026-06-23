@@ -1,435 +1,377 @@
 // ─────────────────────────────────────────────────────────
-//  DRAW TITLE SCREEN
+// TITLE SCREEN
 // ─────────────────────────────────────────────────────────
 function drawTitle() {
-  background(15, 28, 15);
-  drawSky();
-  drawBackgroundTrees(0);
+  background(12, 22, 12);
+  drawSky(0);
+  drawBgTrees(0);
   drawGround();
 
-  fill(0, 0, 0, 170);
   noStroke();
+  fill(0, 0, 0, 160);
   rectMode(CENTER);
-  rect(CANVAS_W / 2, CANVAS_H / 2, 520, 220, 4);
+  rect(CANVAS_W / 2, CANVAS_H / 2, 500, 215, 6);
 
-  fill(180, 220, 140);
+  fill(190, 225, 150);
   textAlign(CENTER, CENTER);
-  textSize(42);
-  textStyle(BOLD);
-  text('THROUGH THE TREES', CANVAS_W / 2, CANVAS_H / 2 - 60);
+  textSize(38); textStyle(BOLD);
+  text('THROUGH THE TREES', CANVAS_W / 2, CANVAS_H / 2 - 65);
 
-  fill(140, 180, 100);
-  textSize(13);
-  textStyle(NORMAL);
-  text('A girl needs to get home before dark.', CANVAS_W / 2, CANVAS_H / 2 - 20);
-  text('The forest has other ideas.', CANVAS_W / 2, CANVAS_H / 2 + 5);
+  fill(140, 180, 105);
+  textSize(12); textStyle(NORMAL);
+  text('She just needs to get home.', CANVAS_W / 2, CANVAS_H / 2 - 28);
+  text('The forest has other ideas.',  CANVAS_W / 2, CANVAS_H / 2 - 10);
 
-  if (floor(frameCount / 35) % 2 === 0) {
-    fill(220, 240, 180);
-    textSize(14);
-    text('PRESS SPACE TO START', CANVAS_W / 2, CANVAS_H / 2 + 55);
+  if (floor(frameCount / 32) % 2 === 0) {
+    fill(230, 245, 190); textSize(13);
+    text('PRESS SPACE TO START', CANVAS_W / 2, CANVAS_H / 2 + 42);
   }
-
-  fill(100, 140, 80);
-  textSize(11);
-  text('A / D — move     SPACE or W — jump', CANVAS_W / 2, CANVAS_H / 2 + 85);
-
+  fill(100, 135, 75); textSize(10);
+  text('A / D  move          SPACE or W  jump', CANVAS_W / 2, CANVAS_H / 2 + 72);
   rectMode(CORNER);
 }
 
 // ─────────────────────────────────────────────────────────
-//  DRAW GAMEPLAY
+// GAMEPLAY
 // ─────────────────────────────────────────────────────────
 function drawGame() {
-  drawSky();
-  drawBackgroundTrees(scrollX * 0.35);
+  let progress = constrain(-scrollX / (LEVEL_LENGTH - CANVAS_W), 0, 1);
+  drawSky(progress);
+  drawBgTrees(scrollX * 0.3);
   drawGround();
   drawSigns();
-  drawCollectibles();
   drawTrees();
-  drawBears();
+  drawPlatforms();
+  drawBear();
   drawCharacter();
+  drawRiver(progress);
   drawHUD();
   drawFlipWarning();
   drawFrost();
 }
 
 // ─────────────────────────────────────────────────────────
-//  SKY — dusk gradient, shifts warmer as you progress
+// SKY
 // ─────────────────────────────────────────────────────────
-function drawSky() {
-  let progress = constrain(-scrollX / (levelLength - CANVAS_W), 0, 1);
-
-  // top colour → bottom colour, lerped by progress
-  let topR = lerp(30,  120, progress);
-  let topG = lerp(50,  60,  progress);
-  let topB = lerp(100, 40,  progress);
-  let botR = lerp(80,  200, progress);
-  let botG = lerp(120, 100, progress);
-  let botB = lerp(160, 60,  progress);
-
+function drawSky(progress) {
+  let topR = lerp(28, 110, progress), topG = lerp(48, 58, progress), topB = lerp(95, 38, progress);
+  let botR = lerp(72, 190, progress), botG = lerp(112, 95, progress), botB = lerp(150, 55, progress);
   noStroke();
-  let skyH = GROUND_Y + 50; // fill right down to ground
-  for (let i = 0; i <= skyH; i++) {
-    let t = i / skyH;
+  for (let i = 0; i <= GROUND_Y + 50; i++) {
+    let t = i / (GROUND_Y + 50);
     fill(lerp(topR, botR, t), lerp(topG, botG, t), lerp(topB, botB, t));
     rect(0, i, CANVAS_W, 1);
   }
 }
 
 // ─────────────────────────────────────────────────────────
-//  BACKGROUND TREES — properly tiling parallax
+// BACKGROUND TREES — parallax silhouettes
 // ─────────────────────────────────────────────────────────
-function drawBackgroundTrees(rawOffset) {
-  // Spacing between bg trees
-  let spacing = 90;
-  let tileW   = spacing;
-  // How many trees to fill the canvas + buffer
-  let count   = ceil(CANVAS_W / tileW) + 3;
-
-  // Offset within one tile cycle (always positive)
-  let offset = ((rawOffset * 0.4) % tileW + tileW) % tileW;
-
+function drawBgTrees(rawOffset) {
+  let spacing = 100;
+  let count   = ceil(CANVAS_W / spacing) + 3;
+  let offset  = ((rawOffset * 0.35) % spacing + spacing) % spacing;
   noStroke();
   for (let i = -1; i < count; i++) {
-    let sx = i * tileW - offset;
-
-    // Vary height by position so they're not uniform
+    let sx   = i * spacing - offset;
     let seed = ((i * 137) % 7 + 7) % 7;
-    let treeH = 110 + seed * 14;
-    let trunkW = 10;
-
-    // trunk
-    fill(45, 28, 14);
-    rect(sx + tileW * 0.5 - trunkW / 2, GROUND_Y - treeH * 0.38, trunkW, treeH * 0.42);
-
-    // canopy — darkened for background depth
-    fill(22, 52, 22);
-    triangle(
-      sx + tileW * 0.5,      GROUND_Y - treeH,
-      sx + tileW * 0.5 - 28, GROUND_Y - treeH * 0.52,
-      sx + tileW * 0.5 + 28, GROUND_Y - treeH * 0.52
-    );
+    let h    = 100 + seed * 12;
+    fill(38, 24, 10);
+    rect(sx + spacing*0.5 - 4, GROUND_Y - h*0.38, 8, h*0.42);
     fill(18, 44, 18);
-    triangle(
-      sx + tileW * 0.5,      GROUND_Y - treeH * 0.72,
-      sx + tileW * 0.5 - 35, GROUND_Y - treeH * 0.3,
-      sx + tileW * 0.5 + 35, GROUND_Y - treeH * 0.3
-    );
-    fill(14, 36, 14);
-    triangle(
-      sx + tileW * 0.5,      GROUND_Y - treeH * 0.45,
-      sx + tileW * 0.5 - 42, GROUND_Y - treeH * 0.1,
-      sx + tileW * 0.5 + 42, GROUND_Y - treeH * 0.1
-    );
+    triangle(sx+spacing*0.5, GROUND_Y-h,       sx+spacing*0.5-24, GROUND_Y-h*0.52, sx+spacing*0.5+24, GROUND_Y-h*0.52);
+    fill(15, 36, 15);
+    triangle(sx+spacing*0.5, GROUND_Y-h*0.70,  sx+spacing*0.5-30, GROUND_Y-h*0.30, sx+spacing*0.5+30, GROUND_Y-h*0.30);
+    fill(12, 30, 12);
+    triangle(sx+spacing*0.5, GROUND_Y-h*0.44,  sx+spacing*0.5-36, GROUND_Y-h*0.08, sx+spacing*0.5+36, GROUND_Y-h*0.08);
   }
 }
 
 // ─────────────────────────────────────────────────────────
-//  GROUND
+// GROUND
 // ─────────────────────────────────────────────────────────
 function drawGround() {
   noStroke();
-
-  // Main dirt fill — from GROUND_Y down to bottom of canvas
-  fill(55, 35, 18);
+  fill(48, 30, 14);
   rect(0, GROUND_Y, CANVAS_W, CANVAS_H - GROUND_Y);
-
-  // Grass strip on top
-  fill(55, 110, 35);
-  rect(0, GROUND_Y - 2, CANVAS_W, 18);
-
-  // Darker grass top edge
-  fill(40, 85, 25);
+  fill(50, 100, 30);
+  rect(0, GROUND_Y - 2, CANVAS_W, 16);
+  fill(38, 78, 22);
   rect(0, GROUND_Y - 2, CANVAS_W, 5);
 
-  // Scrolling grass tufts
-  fill(45, 95, 28);
-  let tileW = 60;
-  let count = ceil(CANVAS_W / tileW) + 2;
-  let offset = ((scrollX) % tileW + tileW) % tileW;
+  fill(42, 88, 26);
+  let tile = 55, count = ceil(CANVAS_W / tile) + 2;
+  let off  = ((scrollX) % tile + tile) % tile;
   for (let i = -1; i < count; i++) {
-    let gx = i * tileW + offset;
-    let seed = (i * 13 + 5) % 5;
-    rect(gx + seed * 8, GROUND_Y - 6, 3, 6);
-    rect(gx + seed * 8 + 10, GROUND_Y - 4, 3, 4);
-    rect(gx + seed * 8 + 22, GROUND_Y - 7, 3, 7);
-    rect(gx + seed * 8 + 34, GROUND_Y - 5, 3, 5);
+    let gx   = i * tile + off;
+    let seed = (i * 11 + 3) % 5;
+    rect(gx + seed*7,    GROUND_Y - 6, 3, 6);
+    rect(gx + seed*7+9,  GROUND_Y - 4, 3, 4);
+    rect(gx + seed*7+20, GROUND_Y - 7, 3, 7);
+    rect(gx + seed*7+32, GROUND_Y - 5, 3, 5);
   }
 }
 
 // ─────────────────────────────────────────────────────────
-//  STATIC TREES (foreground obstacles)
+// FOREGROUND TREES
 // ─────────────────────────────────────────────────────────
 function drawTrees() {
   noStroke();
   for (let o of obstacles) {
+    if (o.type !== 'tree') continue;
     let sx = o.x + scrollX;
-    if (sx < -80 || sx > CANVAS_W + 80) continue;
-
+    if (sx < -100 || sx > CANVAS_W + 100) continue;
     let cx = sx + o.w / 2;
-
-    // trunk
-    fill(65, 42, 18);
-    rect(cx - o.w * 0.22, GROUND_Y - o.h * 0.55, o.w * 0.44, o.h * 0.58);
-
-    // canopy layers — brighter than bg trees
-    fill(38, 100, 38);
-    triangle(cx, GROUND_Y - o.h - 25, cx - 32, GROUND_Y - o.h * 0.52, cx + 32, GROUND_Y - o.h * 0.52);
-    fill(30, 84, 30);
-    triangle(cx, GROUND_Y - o.h, cx - 40, GROUND_Y - o.h * 0.35, cx + 40, GROUND_Y - o.h * 0.35);
-    fill(24, 68, 24);
-    triangle(cx, GROUND_Y - o.h * 0.65, cx - 46, GROUND_Y - o.h * 0.1, cx + 46, GROUND_Y - o.h * 0.1);
+    fill(58, 36, 14);
+    rect(cx - o.w*0.2, GROUND_Y - o.h*0.5, o.w*0.4, o.h*0.55);
+    fill(38, 95, 38);
+    triangle(cx, GROUND_Y-o.h-20,    cx-28, GROUND_Y-o.h*0.52, cx+28, GROUND_Y-o.h*0.52);
+    fill(30, 80, 30);
+    triangle(cx, GROUND_Y-o.h,       cx-36, GROUND_Y-o.h*0.32, cx+36, GROUND_Y-o.h*0.32);
+    fill(22, 62, 22);
+    triangle(cx, GROUND_Y-o.h*0.62,  cx-44, GROUND_Y-o.h*0.08, cx+44, GROUND_Y-o.h*0.08);
   }
 }
 
 // ─────────────────────────────────────────────────────────
-//  BEARS
+// BRANCH PLATFORMS
 // ─────────────────────────────────────────────────────────
-function drawBears() {
-  for (let b of bears) {
-    let sx = b.x + scrollX;
-    if (sx < -80 || sx > CANVAS_W + 80) continue;
+function drawPlatforms() {
+  noStroke();
+  for (let p of platforms) {
+    let sx = p.x + scrollX;
+    if (sx < -200 || sx > CANVAS_W + 200) continue;
 
-    if (bearImg) {
-      imageMode(CORNER);
-      image(bearImg, sx, b.y, b.w, b.h);
-    } else {
-      // placeholder
-      noStroke();
-      fill(90, 60, 30);
-      ellipse(sx + b.w / 2, b.y + b.h * 0.55, b.w, b.h * 0.7);
-      ellipse(sx + b.w / 2, b.y + b.h * 0.22, b.w * 0.58, b.h * 0.42);
-      ellipse(sx + b.w * 0.28, b.y + b.h * 0.06, 9, 9);
-      ellipse(sx + b.w * 0.72, b.y + b.h * 0.06, 9, 9);
+    // Branch plank — dark wood colour
+    fill(72, 44, 16);
+    rect(sx, p.y, p.w, p.h, 3);
+
+    // Bark texture lines
+    stroke(55, 32, 10); strokeWeight(1);
+    for (let i = 0; i < p.w; i += 18) {
+      line(sx + i, p.y + 2, sx + i + 10, p.y + p.h - 2);
     }
-    imageMode(CENTER);
+    noStroke();
+
+    // Tiny leaves on left/right tips
+    fill(35, 85, 30);
+    ellipse(sx + 8,        p.y - 6, 18, 12);
+    ellipse(sx + p.w - 8,  p.y - 6, 18, 12);
   }
 }
 
 // ─────────────────────────────────────────────────────────
-//  COLLECTIBLES
-// ─────────────────────────────────────────────────────────
-function drawCollectibles() {
-  for (let c of collectibles) {
-    if (c.collected) continue;
-    let sx = c.x + scrollX;
-    if (sx < -50 || sx > CANVAS_W + 50) continue;
-
-    let floatY = c.y + sin(frameCount * 0.05 + c.x * 0.01) * 4;
-    let cx = sx + c.w / 2;
-
-    noStroke();
-    fill(215, 210, 195);
-    ellipse(cx, floatY + c.h * 0.42, c.w * 0.82, c.h * 0.68);
-    fill(40, 30, 25);
-    ellipse(cx - 5, floatY + c.h * 0.36, 5, 5);
-    ellipse(cx + 5, floatY + c.h * 0.36, 5, 5);
-    stroke(40, 30, 25);
-    strokeWeight(1);
-    line(cx - 7, floatY + c.h * 0.58, cx + 7, floatY + c.h * 0.58);
-    noStroke();
-  }
-}
-
-// ─────────────────────────────────────────────────────────
-//  PROGRESS SIGNS
+// SIGNS
 // ─────────────────────────────────────────────────────────
 function drawSigns() {
-  for (let s of signs) {
-    let sx = s.x + scrollX;
-    if (sx < -120 || sx > CANVAS_W + 120) continue;
-
+  for (let o of obstacles) {
+    if (o.type !== 'sign') continue;
+    let sx = o.x + scrollX;
+    if (sx < -140 || sx > CANVAS_W + 140) continue;
     noStroke();
-    fill(70, 48, 20);
-    rect(sx, GROUND_Y - 58, 5, 62);
-
-    fill(195, 165, 95);
-    rect(sx - 32, GROUND_Y - 78, 68, 26, 2);
-    stroke(110, 80, 35);
-    strokeWeight(1);
-    noFill();
-    rect(sx - 32, GROUND_Y - 78, 68, 26, 2);
-
+    fill(60, 40, 16);
+    rect(sx, GROUND_Y - 62, 5, 66);
+    fill(190, 158, 88);
+    rect(sx - 34, GROUND_Y - 82, 72, 26, 3);
+    stroke(105, 75, 30); strokeWeight(1); noFill();
+    rect(sx - 34, GROUND_Y - 82, 72, 26, 3);
     noStroke();
-    fill(55, 30, 8);
-    textAlign(CENTER, CENTER);
-    textSize(8);
-    textStyle(BOLD);
-    text(s.label, sx + 2, GROUND_Y - 65);
+    fill(50, 28, 6);
+    textAlign(CENTER, CENTER); textSize(7); textStyle(BOLD);
+    text(o.label, sx + 2, GROUND_Y - 69);
     textStyle(NORMAL);
   }
 }
 
 // ─────────────────────────────────────────────────────────
-//  PLAYER CHARACTER
+// RIVER — pinned to right edge once scroll maxes out
+// ─────────────────────────────────────────────────────────
+function drawRiver(progress) {
+  if (progress < 0.70) return;
+
+  // Once progress hits 1.0 (scroll clamped), river stays fixed on screen
+  let alpha  = map(progress, 0.70, 0.95, 0, 255);
+  alpha = constrain(alpha, 0, 255);
+
+  // River X: slides in from right, fully visible at progress 1.0
+  let riverX = map(progress, 0.70, 1.0, CANVAS_W + 60, CANVAS_W - 200);
+  riverX = constrain(riverX, CANVAS_W - 200, CANVAS_W + 60);
+
+  noStroke();
+  fill(50, 105, 170, alpha);
+  rect(riverX, GROUND_Y - 4, CANVAS_W - riverX + 10, CANVAS_H - GROUND_Y + 4);
+
+  stroke(75, 140, 205, alpha * 0.55); strokeWeight(1.5); noFill();
+  for (let i = 0; i < 4; i++) {
+    let ry = GROUND_Y + 14 + i * 20;
+    let rx = riverX + 18 + sin(frameCount * 0.04 + i) * 6;
+    line(rx, ry, rx + 38, ry);
+  }
+  noStroke();
+}
+
+// ─────────────────────────────────────────────────────────
+// BEAR
+// ─────────────────────────────────────────────────────────
+function drawBear() {
+  if (!bear) return;
+  let sx = bear.x + scrollX;
+  if (sx < -100 || sx > CANVAS_W + 100) return;
+
+  if (bearImg) {
+    imageMode(CORNER);
+    image(bearImg, sx, bear.y, bear.w, bear.h);
+    imageMode(CENTER);
+  } else {
+    noStroke();
+    fill(88, 56, 26);
+    ellipse(sx+bear.w/2, bear.y+bear.h*0.58, bear.w,      bear.h*0.70);
+    ellipse(sx+bear.w/2, bear.y+bear.h*0.22, bear.w*0.58, bear.h*0.45);
+    fill(72, 45, 18);
+    ellipse(sx+bear.w*0.28, bear.y+bear.h*0.04, 11, 11);
+    ellipse(sx+bear.w*0.72, bear.y+bear.h*0.04, 11, 11);
+    fill(20, 12, 4);
+    ellipse(sx+bear.w*0.38, bear.y+bear.h*0.18, 4, 4);
+    ellipse(sx+bear.w*0.62, bear.y+bear.h*0.18, 4, 4);
+    fill(115, 75, 38);
+    ellipse(sx+bear.w/2, bear.y+bear.h*0.28, 12, 8);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// PLAYER CHARACTER
 // ─────────────────────────────────────────────────────────
 function drawCharacter() {
   if (player.invincible && floor(player.invincibleTimer / 6) % 2 === 0) return;
-
-  let drawX = player.x;
-  let drawY = player.y;
+  let dx = player.x, dy = player.y;
 
   if (characterSheet) {
     let dir    = player.direction || 'right';
     let row    = SPRITE.rows[dir];
     let offset = SPRITE.offsets[dir];
-    let sx = player.currentFrame * SPRITE.frameWidth + offset.x;
-    let sy = row * SPRITE.frameHeight + offset.y;
-    let dw = SPRITE.frameWidth  * SPRITE.scale;
-    let dh = SPRITE.frameHeight * SPRITE.scale;
+    let sx     = player.currentFrame * SPRITE.frameWidth + offset.x;
+    let sy     = row * SPRITE.frameHeight + offset.y;
+    let dw     = SPRITE.frameWidth  * SPRITE.scale;
+    let dh     = SPRITE.frameHeight * SPRITE.scale;
     imageMode(CENTER);
-    image(characterSheet, drawX, drawY - player.h / 2, dw, dh, sx, sy, SPRITE.frameWidth, SPRITE.frameHeight);
+    image(characterSheet, dx, dy - player.h/2, dw, dh, sx, sy, SPRITE.frameWidth, SPRITE.frameHeight);
   } else {
-    // Placeholder
     noStroke();
     fill(200, 150, 100);
-    ellipse(drawX, drawY - player.h * 0.85, 20, 20);
-    fill(80, 110, 75);
-    rect(drawX - 9, drawY - player.h * 0.72, 18, 26, 2);
-    fill(60, 45, 30);
-    rect(drawX - 9, drawY - player.h * 0.46, 7, 18, 2);
-    rect(drawX + 2,  drawY - player.h * 0.46, 7, 18, 2);
+    ellipse(dx, dy - player.h*0.87, 18, 18);
+    fill(120, 75, 140);
+    rect(dx - 8, dy - player.h*0.74, 16, 24, 2);
+    fill(60, 42, 28);
+    rect(dx - 8, dy - player.h*0.50, 6, 22, 2);
+    rect(dx + 2, dy - player.h*0.50, 6, 22, 2);
   }
 }
 
 // ─────────────────────────────────────────────────────────
-//  HUD
+// HUD
 // ─────────────────────────────────────────────────────────
 function drawHUD() {
   noStroke();
-  textAlign(LEFT, TOP);
-  textSize(11);
-  fill(255);
-  text('HEALTH', 12, 12);
-
+  textAlign(LEFT, TOP); textSize(10); fill(210, 210, 210);
+  text('HP', 12, 12);
   for (let i = 0; i < player.maxHealth; i++) {
-    fill(i < player.health ? color(200, 70, 70) : color(55, 55, 55));
-    ellipse(18 + i * 18, 38, 12, 12);
+    fill(i < player.health ? color(210, 60, 60) : color(55, 55, 55));
+    ellipse(16 + i * 20, 36, 13, 13);
   }
 
-  fill(255);
-  textSize(11);
-  text('SKULLS  ' + collected + ' / ' + collectibles.length, 12, 52);
-
-  // Flipped label
   if (flipped) {
-    fill(255, 70, 50, 230);
-    textAlign(CENTER, TOP);
-    textSize(13);
-    textStyle(BOLD);
+    fill(255, 55, 40, 240);
+    textAlign(CENTER, TOP); textSize(14); textStyle(BOLD);
     text('! CONTROLS FLIPPED !', CANVAS_W / 2, 10);
     textStyle(NORMAL);
   }
-
-  // Sun / time bar
-  let progress = constrain(-scrollX / (levelLength - CANVAS_W), 0, 1);
-  noStroke();
-  fill(30, 30, 30, 180);
-  rect(CANVAS_W - 155, 12, 135, 12, 4);
-  fill(lerpColor(color(220, 170, 30), color(210, 55, 20), progress));
-  rect(CANVAS_W - 155, 12, 135 * progress, 12, 4);
-  fill(255);
-  textAlign(RIGHT, TOP);
-  textSize(9);
-  text('TIME ▶', CANVAS_W - 12, 28);
 }
 
 // ─────────────────────────────────────────────────────────
-//  FLIP WARNING — red edge flash before flip
+// FLIP WARNING — red border flash before snap
 // ─────────────────────────────────────────────────────────
 function drawFlipWarning() {
   if (!warningActive) return;
   if (floor(frameCount / 8) % 2 === 0) {
-    noFill();
-    stroke(220, 50, 50, 170);
-    strokeWeight(7);
-    rect(3, 3, CANVAS_W - 6, CANVAS_H - 6);
+    noFill(); stroke(210, 45, 45, 180); strokeWeight(8);
+    rect(4, 4, CANVAS_W - 8, CANVAS_H - 8);
     noStroke();
   }
 }
 
 // ─────────────────────────────────────────────────────────
-//  FROST VIGNETTE
+// FROST VIGNETTE
 // ─────────────────────────────────────────────────────────
 function drawFrost() {
   if (frostLevel <= 0.02) return;
-  let alpha = frostLevel * 190;
+  let alpha = frostLevel * 180;
   noStroke();
-  let bands = 50;
+  let bands = 48;
   for (let i = 0; i < bands; i++) {
     let t = 1 - i / bands;
-    fill(150, 195, 230, alpha * t * t);
-    let thick = 2;
-    rect(0,               i * thick,                    CANVAS_W, thick); // top
-    rect(0,               CANVAS_H - i * thick - thick, CANVAS_W, thick); // bottom
-    rect(i * thick,       0,                            thick, CANVAS_H); // left
-    rect(CANVAS_W - i * thick - thick, 0,               thick, CANVAS_H); // right
+    fill(145, 190, 228, alpha * t * t);
+    let th = 2;
+    rect(0, i*th, CANVAS_W, th);
+    rect(0, CANVAS_H - i*th - th, CANVAS_W, th);
+    rect(i*th, 0, th, CANVAS_H);
+    rect(CANVAS_W - i*th - th, 0, th, CANVAS_H);
   }
 }
 
 // ─────────────────────────────────────────────────────────
-//  WIN SCREEN
+// WIN SCREEN
 // ─────────────────────────────────────────────────────────
 function drawWin() {
-  drawSky();
-  drawBackgroundTrees(0);
+  // Draw the world one last time so it doesn't flash blank
+  let progress = 1;
+  drawSky(progress);
+  drawBgTrees(scrollX * 0.3);
   drawGround();
+  drawRiver(1);
 
-  fill(0, 0, 0, 170);
+  // Bright overlay fade-in
   noStroke();
+  fill(0, 0, 0, 170);
   rectMode(CENTER);
-  rect(CANVAS_W / 2, CANVAS_H / 2, 480, 200, 4);
+  rect(CANVAS_W/2, CANVAS_H/2, 500, 215, 8);
 
-  fill(180, 240, 150);
-  textAlign(CENTER, CENTER);
-  textSize(38);
-  textStyle(BOLD);
-  text('YOU MADE IT!', CANVAS_W / 2, CANVAS_H / 2 - 50);
+  fill(175, 238, 145);
+  textAlign(CENTER, CENTER); textSize(36); textStyle(BOLD);
+  text('YOU MADE IT HOME', CANVAS_W/2, CANVAS_H/2 - 55);
 
-  fill(140, 190, 110);
-  textSize(13);
-  textStyle(NORMAL);
-  text('She found her way through the forest.', CANVAS_W / 2, CANVAS_H / 2 - 10);
-  text('Skulls collected: ' + collected + ' / ' + collectibles.length, CANVAS_W / 2, CANVAS_H / 2 + 15);
+  fill(135, 190, 108); textSize(12); textStyle(NORMAL);
+  text('She found her way through the forest.', CANVAS_W/2, CANVAS_H/2 - 16);
+  text('The lights of home flickered through the trees.', CANVAS_W/2, CANVAS_H/2 + 6);
 
-  if (floor(frameCount / 35) % 2 === 0) {
-    fill(220, 240, 180);
-    textSize(13);
-    text('PRESS SPACE to play again', CANVAS_W / 2, CANVAS_H / 2 + 55);
+  if (floor(frameCount / 32) % 2 === 0) {
+    fill(222, 244, 180); textSize(12);
+    text('PRESS SPACE to play again', CANVAS_W/2, CANVAS_H/2 + 54);
   }
   rectMode(CORNER);
 }
 
 // ─────────────────────────────────────────────────────────
-//  GAME OVER SCREEN
+// GAME OVER SCREEN
 // ─────────────────────────────────────────────────────────
 function drawGameOver() {
-  background(8, 12, 8);
-  drawBackgroundTrees(0);
+  background(6, 10, 6);
+  drawBgTrees(0);
   drawGround();
 
-  fill(0, 0, 0, 190);
-  noStroke();
-  rectMode(CENTER);
-  rect(CANVAS_W / 2, CANVAS_H / 2, 460, 200, 4);
+  noStroke(); fill(0, 0, 0, 185); rectMode(CENTER);
+  rect(CANVAS_W/2, CANVAS_H/2, 460, 210, 6);
 
-  fill(200, 80, 60);
-  textAlign(CENTER, CENTER);
-  textSize(36);
-  textStyle(BOLD);
-  text('LOST IN THE FOREST', CANVAS_W / 2, CANVAS_H / 2 - 50);
+  fill(195, 70, 55);
+  textAlign(CENTER, CENTER); textSize(34); textStyle(BOLD);
+  text('LOST IN THE FOREST', CANVAS_W/2, CANVAS_H/2 - 52);
 
-  fill(170, 120, 100);
-  textSize(13);
-  textStyle(NORMAL);
-  text('The cold swallowed the path.', CANVAS_W / 2, CANVAS_H / 2 - 10);
-  text('She never made it home.', CANVAS_W / 2, CANVAS_H / 2 + 15);
+  fill(165, 110, 95); textSize(12); textStyle(NORMAL);
+  text('The cold crept in and the path disappeared.', CANVAS_W/2, CANVAS_H/2 - 14);
+  text('She never made it home.',                     CANVAS_W/2, CANVAS_H/2 + 10);
 
-  if (floor(frameCount / 35) % 2 === 0) {
-    fill(220, 160, 140);
-    textSize(13);
-    text('PRESS SPACE to try again', CANVAS_W / 2, CANVAS_H / 2 + 55);
+  if (floor(frameCount / 32) % 2 === 0) {
+    fill(218, 155, 135); textSize(12);
+    text('PRESS SPACE to try again', CANVAS_W/2, CANVAS_H/2 + 55);
   }
   rectMode(CORNER);
 }

@@ -18,10 +18,10 @@ function setup() {
 
 function draw() {
   switch (gameState) {
-    case STATE_TITLE:    drawTitle();    break;
+    case STATE_TITLE:    drawTitle();              break;
     case STATE_PLAY:     updateGame(); drawGame(); break;
-    case STATE_WIN:      drawWin();      break;
-    case STATE_GAMEOVER: drawGameOver(); break;
+    case STATE_WIN:      drawWin();                break;
+    case STATE_GAMEOVER: drawGameOver();           break;
   }
 }
 
@@ -30,9 +30,8 @@ function updateGame() {
   handleInput();
   applyPhysics();
   updateFlip();
-  updateBears();
-  checkObstacleCollisions();
-  checkCollectibles();
+  updateBear();
+  checkCollisions();
   updateInvincibility();
   checkWin();
 
@@ -40,7 +39,7 @@ function updateGame() {
   if (player.isMoving) {
     player.frameTimer++;
     if (player.frameTimer >= SPRITE.animSpeed) {
-      player.frameTimer = 0;
+      player.frameTimer   = 0;
       player.currentFrame = (player.currentFrame + 1) % SPRITE.numFrames;
     }
   } else {
@@ -53,15 +52,13 @@ function updateGame() {
 function handleInput() {
   player.isMoving = false;
 
-  // Swap A/D when flipped — the ABI mechanic
-  let moveLeft  = flipped ? 68 : 65; // D key when flipped, A normally
-  let moveRight = flipped ? 65 : 68; // A key when flipped, D normally
+  // Core ABI mechanic: A/D silently swap when flipped
+  let goLeft  = flipped ? 68 : 65;   // D when flipped, A normally
+  let goRight = flipped ? 65 : 68;   // A when flipped, D normally
 
-  const MOVE_SPEED   = 3;
-  const PLAYER_LOCK_X = CANVAS_W * 0.35; // player stays left of this, world scrolls
+  const PLAYER_LOCK_X = CANVAS_W * 0.40;
 
-  if (keyIsDown(moveLeft)) {
-    // Only scroll back if we've moved forward; player walks left on screen
+  if (keyIsDown(goLeft)) {
     if (scrollX < 0) {
       scrollX += MOVE_SPEED;
       if (scrollX > 0) scrollX = 0;
@@ -72,15 +69,17 @@ function handleInput() {
     player.isMoving  = true;
   }
 
-  if (keyIsDown(moveRight)) {
+  if (keyIsDown(goRight)) {
+    let minScroll = -(LEVEL_LENGTH - CANVAS_W);
     if (player.x < PLAYER_LOCK_X) {
-      // Player walks right freely on screen
       player.x += MOVE_SPEED;
-    } else {
-      // Scroll the world leftward
+    } else if (scrollX > minScroll) {
+      // Scroll the world
       scrollX -= MOVE_SPEED;
-      let minScroll = -(levelLength - CANVAS_W);
       if (scrollX < minScroll) scrollX = minScroll;
+    } else {
+      // World fully scrolled — let player walk right freely into the river
+      player.x += MOVE_SPEED;
     }
     player.direction = 'right';
     player.isMoving  = true;
@@ -92,7 +91,6 @@ function handleInput() {
     player.onGround = false;
   }
 
-  // Keep player on screen horizontally
   player.x = constrain(player.x, 60, CANVAS_W - 60);
 }
 

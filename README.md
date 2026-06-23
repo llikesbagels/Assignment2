@@ -1,76 +1,74 @@
-# Through the Trees
-**GBDA 302 — Assignment 2 | Group [#]**
+# Through the Trees — GBDA 302 Assignment 2
 
----
+## Game Concept and Mechanics
 
-## Game Concept & Mechanics
+*Through the Trees* is a side-scrolling platformer. A girl needs to reach home before dark after getting off a train deep in the forest. The player moves her right using **A / D**, jumps with **Space or W**, and must navigate through trees and past a bear.
 
-*Through the Trees* is a pixel-style side-scrolling platformer. A girl steps off a train into a dense forest and must reach home before dark. The forest is full of obstacles — bears, trees, biting cold — and her ABI makes navigation unreliable.
+### Core Mechanic — Control Flip (ABI Spatial Disorientation)
 
-**Core mechanic — the control flip:**
-At random intervals, the left and right movement keys (A and D) silently swap. Press D expecting to go right, and you go left instead. The flip lasts a few seconds, then resets. A warning flash appears at the screen edges just before each flip, giving the player a beat to prepare — but not enough to fully avoid disorientation.
+At specific world positions, the left and right controls silently swap. Pressing D suddenly moves the player left instead of right. The flip lasts a few seconds, then snaps back. A red border flashes as a warning just before each flip triggers.
 
-This mechanic simulates **Basal Ganglia ABI**, which affects spatial orientation, directional processing, and automatic motor responses. The key insight: things that feel automatic (walking left = press left) suddenly require conscious re-evaluation.
+This mechanic represents Acquired Brain Injury (ABI) — specifically the spatial disorientation and disrupted motor-direction mapping that can follow a brain injury. The disability is embedded in the control system itself: removing the flip mechanic would make the game mechanically different because the entire challenge is built around reacting to and recovering from misdirected movement.
 
 ---
 
 ## How Affordances Guide Interaction
 
-- **A / D keys** are the standard WASD movement scheme. No instruction needed — players try them immediately.
-- **The first flip** happens in open space with no obstacles nearby. The player experiences disorientation safely, learns to correct, and understands the mechanic through play.
-- **Red edge flash** before each flip signals something is about to change without explaining what. Players learn to treat it as a warning cue.
-- **Progress signs** nailed to trees (e.g. "ZONE 1", "HALFWAY") show advancement without menus or cutscenes.
-- **The sun timer bar** in the top right communicates urgency through colour shift (amber → red) without a countdown clock.
-- **Frost vignette** builds at screen edges when the player takes damage — communicates danger visually without text.
+- The path goes left-to-right with a visible open corridor — players naturally walk right.
+- Trees are visually solid and block movement, teaching collision without explanation.
+- The bear visibly paces back and forth — players pause and wait, learning the timing window through observation.
+- Signs on posts ("STAY ALERT", "→ RIVER") use environmental language to signal progress without UI text.
+- The frost vignette creeping in from the edges signals danger and health loss visually.
+- The sky darkens toward dusk as the player progresses, reinforcing the urgency of reaching home without a literal timer.
 
 ---
 
 ## How GameFlow Supports Learning
 
-| GameFlow Principle | How it appears in the game |
-|---|---|
-| Clear goal | Reach the end of the forest before the sun sets |
-| Immediate feedback | Frost builds on hits; screen flashes on flip warning |
-| Challenge progression | Sparse obstacles early → tighter gaps and more bears later |
-| Player agency | Jump timing, path choice, and flip recovery are all player decisions |
-| Win / lose clarity | Win: reach exit. Lose: health depletes from too many hits |
+The level is structured across seven storyboard zones:
 
-The tutorial section (first ~700px of the level) has wide paths and the first flip in open space. Obstacles are introduced one type at a time — static trees first, then moving bears — before both appear together.
+| Zone | What Happens |
+|------|-------------|
+| 0 — Open path | No obstacles. Player gets used to basic movement. |
+| 1 — First flip (open air) | Flip triggers in a completely clear space. Player discovers the mechanic with zero punishment. |
+| 2 — Tree weaving | A few trees to dodge. No flip. Pure obstacle navigation. |
+| 3 — Flip near trees | Flip fires mid-dodge. Stakes are now real — wrong direction means hitting a tree. |
+| 4 — Bear timing | One bear pacing. Player learns to wait and time their movement. |
+| 5 — Flip near bear | Flip fires while passing the bear. Most chaotic moment of the level. |
+| 6 — Exit | Path clears. River visible. Sign points home. Win. |
+
+Goals are always clear (reach the right side), feedback is immediate (frost vignette, invincibility flash, health hearts), and challenge increases step by step.
 
 ---
 
 ## How the Disability Shapes Gameplay
 
-The ABI mechanic (control flip) is **embedded in the control scheme itself**. It cannot be removed without fundamentally changing how the game works.
+The flip mechanic:
+- Changes **control** — the player's learned muscle memory is suddenly wrong.
+- Changes **timing** — a flip mid-dodge requires the player to override instinct.
+- Changes **decision-making** — during a flip, the player must consciously reverse their input.
+- Affects **perception** — the mismatch between intention and outcome mirrors the disorientation ABI can cause.
 
-- It affects **timing** — the flip can hit mid-jump or mid-dodge
-- It affects **control** — muscle memory works against the player
-- It affects **decision-making** — players have to consciously think about which direction key to press, rather than moving automatically
-- It is **present every run**, not a one-time event
-- It **escalates in difficulty** as obstacle density increases, making the same disorientation more consequential later in the level
-
-The game never tells the player "this character has ABI." The mechanic communicates it through play.
+Without the flip, the game is a straightforward side-scroller. With it, every section demands conscious re-evaluation of which key to press — which is the point.
 
 ---
 
 ## Iteration Changes from Playtesting
 
-*(Fill this in after playtesting sessions)*
+*(To be filled in after in-class playtesting session)*
 
-- Change 1:
-- Change 2:
-- Change 3:
+- Observation notes will be added here.
+- Any control timing, obstacle spacing, or flip duration adjustments will be documented.
 
 ---
 
 ## Controls
 
 | Key | Action |
-|---|---|
+|-----|--------|
 | A | Move left (or right when flipped) |
 | D | Move right (or left when flipped) |
-| SPACE / W | Jump |
-| SPACE | Start / restart (on title / game over screens) |
+| Space / W | Jump |
 
 ---
 
@@ -78,17 +76,17 @@ The game never tells the player "this character has ABI." The mechanic communica
 
 ```
 ASSIGNMENT2/
-├── index.html       — entry point
-├── sketch.js        — p5.js setup, draw loop, input
-├── game.js          — constants, player state, physics, game logic
-├── scenes.js        — all drawing functions per game state
-├── style.css        — page styling
+├── index.html          ← entry point
+├── style.css           ← page layout and canvas styling
+├── game.js             ← game logic, physics, flip mechanic, collision
+├── scenes.js           ← all drawing functions
+├── sketch.js           ← p5.js setup, draw loop, input handling
+├── jsconfig.json       ← VS Code p5 type support
 ├── libraries/
-│   └── p5.min.js
-├── assets/
-│   └── images/
-│       ├── banf.png       — character sprite sheet
-│       ├── bear.jpg       — bear obstacle
-│       └── winscreen.jpg  — win screen background
-└── README.md
+│   ├── p5.min.js
+│   └── p5.sound.min.js
+└── assets/
+    └── images/
+        ├── banf.png    ← character sprite sheet
+        └── bear.jpg    ← bear image
 ```

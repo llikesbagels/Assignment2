@@ -3,19 +3,45 @@ const CANVAS_W = 800;
 const CANVAS_H = 400;
 
 // ─── WORLD ────────────────────────────────────────────────
-const GROUND_Y    = CANVAS_H - 70;   // where the ground surface sits
-const GRAVITY     = 0.55;
-const JUMP_FORCE  = -13;
-const SCROLL_SPEED = 2.5;
+const GROUND_Y   = CANVAS_H - 70;
+const GRAVITY    = 0.55;
+const JUMP_FORCE = -13;
+const MOVE_SPEED = 3;
 
-// ─── PLAYER SPRITE ────────────────────────────────────────
+// ─── GAME STATES ──────────────────────────────────────────
+const STATE_TITLE    = 'title';
+const STATE_PLAY     = 'play';
+const STATE_WIN      = 'win';
+const STATE_GAMEOVER = 'gameover';
+
+// ─── LEVEL LENGTH ─────────────────────────────────────────
+const LEVEL_LENGTH = 5000;
+
+// ─── ZONES (world-space X) ────────────────────────────────
+// Zone 0: open path, learn movement              0 – 900
+// Zone 1: first flip, open air                  900 – 1400
+// Zone 2: two trees to weave through            1400 – 2000
+// Zone 3: branch platforms + flip at platforms  2000 – 2900
+// Zone 4: bear timing puzzle                    2900 – 3700
+// Zone 5: flip fires when near bear             3700 – 4400
+// Zone 6: river / win                           4400 – 5000
+
+// ─── FLIP MECHANIC ────────────────────────────────────────
+// Flip 1: open air ~1000px  (player learns with no punishment)
+// Flip 2: platform zone ~2150px  (flip while jumping)
+// Flip 3: bear proximity — triggered when player gets close (not position-based)
+const FLIP_SCHEDULE  = [1000, 2150]; // world-X triggers for flips 1 & 2
+const FLIP_DURATION  = 180;   // frames flipped
+const FLIP_WARNING   = 60;    // warning frames before position-based flips
+
+// ─── PLAYER SPRITE SHEET ──────────────────────────────────
 const SPRITE = {
   frameWidth:  65.5,
   frameHeight: 50,
   numFrames:   9,
   animSpeed:   8,
   scale:       1.1,
-  rows: { up: 0, left: 1, right: 2, down: 3 },
+  rows:    { up: 0, left: 1, right: 2, down: 3 },
   offsets: {
     down:  { x: 0, y: -9.5 },
     right: { x: 0, y: 105  },
@@ -24,256 +50,261 @@ const SPRITE = {
   },
 };
 
-// ─── GAME STATES ──────────────────────────────────────────
-const STATE_TITLE    = 'title';
-const STATE_PLAY     = 'play';
-const STATE_WIN      = 'win';
-const STATE_GAMEOVER = 'gameover';
-
-// ─── FLIP MECHANIC ────────────────────────────────────────
-// Controls flip: left<->right swap to simulate ABI spatial disorientation
-const FLIP_INTERVAL_MIN = 300;  // frames between flips (min)
-const FLIP_INTERVAL_MAX = 500;  // frames between flips (max)
-const FLIP_DURATION     = 180;  // how long the flip lasts (frames)
-const FLIP_WARNING      = 60;   // warning flash before flip
-
 // ─── PLAYER ───────────────────────────────────────────────
 let player = {
-  x: 120,
-  y: GROUND_Y,
-  vy: 0,
-  w: 40,
-  h: 55,
+  x: 120, y: GROUND_Y,
+  vy: 0,  w: 40, h: 55,
   onGround: false,
-  currentFrame: 0,
-  frameTimer: 0,
-  direction: 'right',
-  isMoving: false,
-  health: 5,
-  maxHealth: 5,
-  invincible: false,
-  invincibleTimer: 0,
-  INVINCIBLE_FRAMES: 60,
+  currentFrame: 0, frameTimer: 0,
+  direction: 'right', isMoving: false,
+  health: 3, maxHealth: 3,
+  invincible: false, invincibleTimer: 0,
+  INVINCIBLE_FRAMES: 90,
 };
 
 // ─── WORLD STATE ──────────────────────────────────────────
-let scrollX      = 0;        // how far we've scrolled
-let gameState    = STATE_TITLE;
-let levelLength  = 5000;     // total level width in px
+let scrollX   = 0;
+let gameState = STATE_TITLE;
 
 // ─── FLIP STATE ───────────────────────────────────────────
-let flipped       = false;
-let flipTimer     = 0;       // counts up; when > FLIP_DURATION, unflips
-let nextFlipIn    = 400;     // frames until next flip triggers
-let flipCountdown = 400;     // counts down to next flip
-let warningActive = false;
+let flipped         = false;
+let flipTimer       = 0;
+let flipIndex       = 0;      // index into FLIP_SCHEDULE
+let bearFlipFired   = false;  // so bear-proximity flip only fires once
+let warningActive   = false;
 
-// ─── OBSTACLES ────────────────────────────────────────────
-// Each: { x, y, w, h, type }
-// type: 'tree' = static blocker, 'bear' = moves back/forth
-let obstacles = [];
-let bears     = [];
+// ─── OBSTACLES & PLATFORMS ────────────────────────────────
+let obstacles  = [];   // { x, y, w, h, type:'tree'|'sign'|'platform' }
+let platforms  = [];   // branch platforms (subset, kept separate for physics)
+let bear       = null;
 
-// ─── COLLECTIBLES (skulls / coins) ────────────────────────
-let collectibles = [];
-let collected    = 0;
-
-// ─── PROGRESS SIGNS ───────────────────────────────────────
-// Posted on trees — "show don't tell" progression markers
-let signs = [];
+// ─── CHECKPOINT ───────────────────────────────────────────
+// When the player falls off a platform they respawn here, not at level start
+const PLATFORM_CHECKPOINT_X      = 2000;  // world X of platform zone start
+const PLATFORM_CHECKPOINT_SCROLL = -(PLATFORM_CHECKPOINT_X - 200); // scrollX at checkpoint
 
 // ─── ASSETS ───────────────────────────────────────────────
 let characterSheet;
 let bearImg;
-let winScreenImg;
 
-// ─── VIGNETTE / FROST LOSE CONDITION ──────────────────────
-// Fills when player hits obstacles; full = game over
-let frostLevel = 0;          // 0.0 → 1.0
-const FROST_PER_HIT  = 0.15;
-const FROST_DECAY    = 0.0005; // slowly recovers
+// ─── FROST / DAMAGE OVERLAY ───────────────────────────────
+let frostLevel = 0;
+const FROST_PER_HIT = 0.34;
+const FROST_DECAY   = 0.0015;  // faster recovery — less punishing visually
 
-// ─────────────────────────────────────────────────────────
-//  HELPER: reset everything for a new game
+// ─── WIN FLASH ────────────────────────────────────────────
+let winTimer = 0;  // counts up after win trigger for a brief "you made it" flash
+
 // ─────────────────────────────────────────────────────────
 function resetGame() {
-  player.x       = 120;
-  player.y       = GROUND_Y;
-  player.vy      = 0;
-  player.health  = player.maxHealth;
-  player.invincible      = false;
+  player.x = 120;
+  player.y = GROUND_Y;
+  player.vy = 0;
+  player.health = player.maxHealth;
+  player.invincible = false;
   player.invincibleTimer = 0;
-  player.direction       = 'right';
-  player.isMoving        = false;
+  player.direction = 'right';
+  player.isMoving  = false;
 
-  scrollX      = 0;
-  frostLevel   = 0;
-  flipped      = false;
-  flipTimer    = 0;
-  flipCountdown = nextFlipIn = floor(random(FLIP_INTERVAL_MIN, FLIP_INTERVAL_MAX));
-  warningActive = false;
-  collected    = 0;
+  scrollX         = 0;
+  frostLevel      = 0;
+  flipped         = false;
+  flipTimer       = 0;
+  flipIndex       = 0;
+  bearFlipFired   = false;
+  warningActive   = false;
+  winTimer        = 0;
 
   buildLevel();
 }
 
 // ─────────────────────────────────────────────────────────
-//  BUILD LEVEL — place trees, bears, signs, collectibles
+// BUILD LEVEL
 // ─────────────────────────────────────────────────────────
 function buildLevel() {
-  obstacles    = [];
-  bears        = [];
-  collectibles = [];
-  signs        = [];
+  obstacles = [];
+  platforms = [];
+  bear      = null;
 
-  // ── Trees (static blockers) ──
-  // Sparse at first, denser toward the end
-  let treePositions = [
-    380, 520, 700, 870,          // early — forgiving gaps
-    1050, 1180,                  // pair
-    1400, 1520, 1640,            // trio
-    1900, 2050, 2150, 2280,
-    2500, 2600, 2720, 2850, 2950,
-    3200, 3350, 3480, 3600, 3750,
-    4000, 4100, 4230, 4380, 4500, 4650, 4800,
-  ];
-
-  for (let tx of treePositions) {
-    obstacles.push({
-      x: tx,
-      y: GROUND_Y - 90,
-      w: 38,
-      h: 100,
-      type: 'tree',
-    });
+  // ── Zone 2: just two spaced trees, generous gaps ──
+  const treeXs = [1450, 1700];
+  for (let tx of treeXs) {
+    obstacles.push({ x: tx, y: GROUND_Y - 100, w: 36, h: 110, type: 'tree' });
   }
 
-  // ── Bears (pacing obstacles) ──
-  // Introduced after first 600px
-  let bearData = [
-    { x: 650,  range: 80 },
-    { x: 1100, range: 60 },
-    { x: 1700, range: 100 },
-    { x: 2400, range: 80 },
-    { x: 3000, range: 120 },
-    { x: 3900, range: 100 },
-    { x: 4600, range: 80  },
+  // ── Zone 3: branch platforms ──
+  // Three platforms at varying heights; player must jump between them.
+  // Flip fires partway through (at FLIP_SCHEDULE[1] = 2150).
+  // If player falls below GROUND_Y while scrollX puts them in the platform zone,
+  // they take damage and respawn at the checkpoint.
+  const platformData = [
+    { x: 2050, y: GROUND_Y - 90,  w: 130, h: 14 },  // first — low, easy
+    { x: 2260, y: GROUND_Y - 130, w: 110, h: 14 },  // second — higher (flip fires here)
+    { x: 2460, y: GROUND_Y - 100, w: 130, h: 14 },  // third — back down
   ];
-  for (let b of bearData) {
-    bears.push({
-      x:      b.x,
-      y:      GROUND_Y - 30,
-      w:      40,
-      h:      40,
-      startX: b.x,
-      range:  b.range,
-      dir:    1,
-      speed:  1.2,
-    });
+  for (let p of platformData) {
+    platforms.push({ ...p, type: 'platform' });
+    obstacles.push({ ...p, type: 'platform' });
   }
 
-  // ── Collectibles (skulls) — scattered across level ──
-  let collectibleX = [300, 600, 950, 1300, 1800, 2300, 2800, 3300, 3800, 4400];
-  for (let cx of collectibleX) {
-    collectibles.push({
-      x: cx,
-      y: GROUND_Y - 80,
-      w: 30,
-      h: 30,
-      collected: false,
-    });
-  }
+  // ── Zone 4 & 5: ONE bear pacing ──
+  bear = {
+    x: 3100, y: GROUND_Y - 40, w: 48, h: 48,
+    startX: 3100, range: 110, dir: 1, speed: 1.0,
+  };
 
-  // ── Progress signs nailed to trees ──
-  signs = [
-    { x: 800,  label: 'ZONE 1'       },
-    { x: 1800, label: 'ZONE 2'       },
-    { x: 3000, label: 'HALFWAY'      },
-    { x: 4200, label: 'ALMOST THERE' },
-  ];
+  // ── Progress signs ──
+  obstacles.push({ x: 800,  type: 'sign', label: 'PATH AHEAD'  });
+  obstacles.push({ x: 1950, type: 'sign', label: 'WATCH YOUR STEP' });
+  obstacles.push({ x: 2700, type: 'sign', label: 'ALMOST HOME' });
+  obstacles.push({ x: 4300, type: 'sign', label: '→ RIVER'     });
 }
 
 // ─────────────────────────────────────────────────────────
-//  PHYSICS — gravity, jump, wall collision
+// PHYSICS — gravity, ground, platform landing
 // ─────────────────────────────────────────────────────────
 function applyPhysics() {
   player.vy += GRAVITY;
   player.y  += player.vy;
 
+  player.onGround = false;
+
+  // Ground landing
   if (player.y >= GROUND_Y) {
-    player.y       = GROUND_Y;
-    player.vy      = 0;
+    // Check: are we in the platform zone? Falling here = damage + checkpoint
+    let worldX = -scrollX + player.x;
+    if (worldX > 2000 && worldX < 2650 && player.vy > 0) {
+      // Fell off platforms
+      takeDamage();
+      respawnAtCheckpoint();
+      return;
+    }
+    player.y        = GROUND_Y;
+    player.vy       = 0;
     player.onGround = true;
-  } else {
-    player.onGround = false;
   }
 
-  // Keep player from going off screen left
+  // Platform landing (top-only, only when falling)
+  if (player.vy > 0) {
+    let px = player.x - scrollX;
+    for (let p of platforms) {
+      let prevBottom = (player.y - player.vy) - player.h; // top of player last frame... actually use feet
+      let feetY      = player.y;                           // feet = player.y (bottom)
+      let feetPrev   = feetY - player.vy;
+      if (px + player.w/2 > p.x && px - player.w/2 < p.x + p.w) {
+        if (feetPrev <= p.y && feetY >= p.y) {
+          player.y        = p.y;
+          player.vy       = 0;
+          player.onGround = true;
+        }
+      }
+    }
+  }
+
   if (player.x < 60) player.x = 60;
-  // Keep player from running too far right (they scroll the world instead)
   if (player.x > CANVAS_W * 0.45) player.x = CANVAS_W * 0.45;
 }
 
 // ─────────────────────────────────────────────────────────
-//  FLIP MECHANIC UPDATE
+// CHECKPOINT RESPAWN
+// ─────────────────────────────────────────────────────────
+function respawnAtCheckpoint() {
+  // Land player at ground just before the platform section
+  scrollX    = PLATFORM_CHECKPOINT_SCROLL;
+  player.x   = 200;
+  player.y   = GROUND_Y;
+  player.vy  = 0;
+  player.onGround = true;
+  // Reset flip state so they get the platform flip again
+  flipped       = false;
+  flipTimer     = 0;
+  // Only reset flip index back to platform flip if it already fired
+  if (flipIndex > 1) flipIndex = 1;
+}
+
+// ─────────────────────────────────────────────────────────
+// FLIP MECHANIC
 // ─────────────────────────────────────────────────────────
 function updateFlip() {
-  if (!flipped) {
-    flipCountdown--;
-    warningActive = (flipCountdown <= FLIP_WARNING);
+  let worldX = -scrollX + player.x;
 
-    if (flipCountdown <= 0) {
-      flipped       = true;
-      flipTimer     = 0;
+  if (!flipped) {
+    // Position-based flips 1 & 2
+    if (flipIndex < FLIP_SCHEDULE.length) {
+      let triggerX = FLIP_SCHEDULE[flipIndex];
+      let warnX    = triggerX - MOVE_SPEED * FLIP_WARNING;
+      warningActive = (worldX >= warnX && worldX < triggerX);
+      if (worldX >= triggerX) {
+        startFlip();
+        flipIndex++;
+      }
+    } else {
       warningActive = false;
+    }
+
+    // Bear-proximity flip (flip 3) — fires once when player gets close
+    if (!bearFlipFired && bear) {
+      let bearScreenX = bear.x + scrollX;
+      // Trigger when bear is about 250px ahead on screen
+      if (bearScreenX < CANVAS_W * 0.75 && bearScreenX > 0) {
+        startFlip();
+        bearFlipFired = true;
+        warningActive = false;
+      }
     }
   } else {
     flipTimer++;
     if (flipTimer >= FLIP_DURATION) {
       flipped       = false;
-      flipCountdown = floor(random(FLIP_INTERVAL_MIN, FLIP_INTERVAL_MAX));
-      warningActive = false;
+      flipTimer     = 0;
     }
   }
 }
 
+function startFlip() {
+  flipped       = true;
+  flipTimer     = 0;
+  warningActive = false;
+}
+
 // ─────────────────────────────────────────────────────────
-//  OBSTACLE COLLISION CHECK
+// BEAR UPDATE
 // ─────────────────────────────────────────────────────────
-function checkObstacleCollisions() {
+function updateBear() {
+  if (!bear) return;
+  bear.x += bear.dir * bear.speed;
+  if (bear.x > bear.startX + bear.range || bear.x < bear.startX - bear.range) {
+    bear.dir *= -1;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// COLLISION
+// ─────────────────────────────────────────────────────────
+function checkCollisions() {
   if (player.invincible) return;
+  let px = player.x - scrollX;
 
-  let px = player.x - scrollX;  // player world X
-  let allObstacles = [...obstacles, ...bears];
-
-  for (let o of allObstacles) {
-    if (rectsOverlap(px, player.y, player.w, player.h,
-                     o.x, o.y, o.w, o.h)) {
-      takeDamage();
-      break;
+  // Trees only (not platforms — platforms are landed on, not collided with)
+  for (let o of obstacles) {
+    if (o.type !== 'tree') continue;
+    if (rectsOverlap(px, player.y, player.w, player.h, o.x, o.y, o.w, o.h)) {
+      takeDamage(); return;
     }
   }
-}
 
-function checkCollectibles() {
-  let px = player.x - scrollX;
-  for (let c of collectibles) {
-    if (c.collected) continue;
-    if (rectsOverlap(px, player.y, player.w, player.h,
-                     c.x, c.y, c.w, c.h)) {
-      c.collected = true;
-      collected++;
+  // Bear (world-space)
+  if (bear) {
+    if (rectsOverlap(px, player.y, player.w, player.h, bear.x, bear.y, bear.w, bear.h)) {
+      takeDamage();
     }
   }
 }
 
 function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
-  // shrink hitboxes slightly for fairness
-  let margin = 8;
-  return ax + margin < bx + bw - margin &&
-         ax + aw - margin > bx + margin &&
-         ay + margin < by + bh - margin &&
-         ay + ah - margin > by + margin;
+  const m = 8;
+  return ax+m < bx+bw-m && ax+aw-m > bx+m &&
+         ay+m < by+bh-m && ay+ah-m > by+m;
 }
 
 function takeDamage() {
@@ -281,10 +312,9 @@ function takeDamage() {
   player.health--;
   player.invincible      = true;
   player.invincibleTimer = player.INVINCIBLE_FRAMES;
-
   if (player.health <= 0) {
     player.health = 0;
-    gameState     = STATE_GAMEOVER;
+    gameState = STATE_GAMEOVER;
   }
 }
 
@@ -293,27 +323,15 @@ function updateInvincibility() {
     player.invincibleTimer--;
     if (player.invincibleTimer <= 0) player.invincible = false;
   }
-  // frost slowly heals
   if (frostLevel > 0) frostLevel = max(0, frostLevel - FROST_DECAY);
 }
 
 // ─────────────────────────────────────────────────────────
-//  UPDATE BEARS (pacing)
-// ─────────────────────────────────────────────────────────
-function updateBears() {
-  for (let b of bears) {
-    b.x += b.dir * b.speed;
-    if (b.x > b.startX + b.range || b.x < b.startX - b.range) {
-      b.dir *= -1;
-    }
-  }
-}
-
-// ─────────────────────────────────────────────────────────
-//  CHECK WIN
+// WIN CHECK — fires when player reaches the → RIVER sign (world X 4300)
 // ─────────────────────────────────────────────────────────
 function checkWin() {
-  if (scrollX + player.x >= levelLength - 100) {
+  let worldX = player.x - scrollX;
+  if (worldX >= 4300) {
     gameState = STATE_WIN;
   }
 }
